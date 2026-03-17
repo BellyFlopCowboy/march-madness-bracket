@@ -19,6 +19,10 @@ const loadBracket = (id) => sbFetch(`brackets?id=eq.${id}&select=*`);
 const searchBrackets = (name) => sbFetch(`brackets?name=ilike.*${encodeURIComponent(name)}*&select=*&order=created_at.desc`);
 const allBrackets = () => sbFetch("brackets?select=*&order=created_at.desc");
 const getResults = async () => { const d = await sbFetch("results?id=eq.1"); return d?.[0]?.picks || {}; };
+const saveResultsPicks = (picks) =>
+  sbFetch("results?id=eq.1", { method:"PATCH", headers:{...SB_HEADERS,"Prefer":"return=representation"},
+    body: JSON.stringify({ picks, updated_at: new Date().toISOString() }) });
+const ADMIN_PW = "Patrick";
 
 // ── SCORING ───────────────────────────────────────────────────────────
 const ROUND_PTS = { pi:0, r64:1, r32:2, s16:4, e8:8, ff:16, champ:32 };
@@ -297,8 +301,156 @@ function Leaderboard({brackets,results,myId,onView}){
   );
 }
 
+// ── ADMIN PANEL ──────────────────────────────────────────────────────
+function AdminPanel(){
+  const [pw,setPw]=useState("");
+  const [authed,setAuthed]=useState(false);
+  const [res,setRes]=useState({});
+  const [saving,setSaving]=useState(false);
+  const [lastSaved,setLastSaved]=useState(null);
+
+  useEffect(()=>{(async()=>{const r=await getResults();setRes(r||{});})();},[]);
+
+  const resolve=k=>{if(typeof k==="string"&&k.startsWith("pi:"))return res[k.slice(3)]||null;return k;};
+
+  const setResult=async(gid,winner)=>{
+    const updated={...res,[gid]:winner};setRes(updated);setSaving(true);
+    await saveResultsPicks(updated);
+    setSaving(false);setLastSaved(new Date().toLocaleTimeString());
+  };
+
+  const clearResult=async(gid)=>{
+    const updated={...res};delete updated[gid];setRes(updated);setSaving(true);
+    await saveResultsPicks(updated);
+    setSaving(false);setLastSaved(new Date().toLocaleTimeString());
+  };
+
+  // Build all games per round based on current results
+  const allGames=useMemo(()=>{
+    const rounds=[];
+
+    // Play-in
+    rounds.push({label:"First Four",games:PLAY_IN.map(pi=>({id:pi.id,t1:pi.t1,t2:pi.t2,region:pi.label}))});
+
+    // R64
+    const r64g=[];
+    for(const reg of RORDER) R64[reg].forEach((pair,i)=>{
+      const t1=resolve(pair[0]),t2=resolve(pair[1]);
+      if(t1&&t2) r64g.push({id:`r64_${reg}_${i}`,t1,t2,region:RLABELS[reg]});
+    });
+    rounds.push({label:"Round of 64",games:r64g});
+
+    // R32
+    const r32g=[];
+    for(const reg of RORDER) R32_PAIRS.forEach(([a,b],i)=>{
+      const t1=res[`r64_${reg}_${a}`],t2=res[`r64_${reg}_${b}`];
+      if(t1&&t2) r32g.push({id:`r32_${reg}_${i}`,t1,t2,region:RLABELS[reg]});
+    });
+    if(r32g.length) rounds.push({label:"Round of 32",games:r32g});
+
+    // S16
+    const s16g=[];
+    for(const reg of RORDER) S16_PAIRS.forEach(([a,b],i)=>{
+      const t1=res[`r32_${reg}_${a}`],t2=res[`r32_${reg}_${b}`];
+      if(t1&&t2) s16g.push({id:`s16_${reg}_${i}`,t1,t2,region:RLABELS[reg]});
+    });
+    if(s16g.length) rounds.push({label:"Sweet 16",games:s16g});
+
+    // E8
+    const e8g=[];
+    for(const reg of RORDER){
+      const t1=res[`s16_${reg}_0`],t2=res[`s16_${reg}_1`];
+      if(t1&&t2) e8g.push({id:`e8_${reg}`,t1,t2,region:RLABELS[reg]});
+    }
+    if(e8g.length) rounds.push({label:"Elite Eight",games:e8g});
+
+    // FF
+    const ffg=[];
+    FF_PAIRS.forEach(([r1,r2],i)=>{
+      const t1=res[`e8_${r1}`],t2=res[`e8_${r2}`];
+      if(t1&&t2) ffg.push({id:`ff_${i}`,t1,t2,region:`${RLABELS[r1]} vs ${RLABELS[r2]}`});
+    });
+    if(ffg.length) rounds.push({label:"Final Four",games:ffg});
+
+    // Champ
+    const ct1=res.ff_0,ct2=res.ff_1;
+    if(ct1&&ct2) rounds.push({label:"Championship",games:[{id:"champ",t1:ct1,t2:ct2,region:"Final"}]});
+
+    return rounds;
+  },[res]);
+
+  if(!authed) return(
+    <div style={{...page,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:24}}>
+      <div style={{fontSize:12,letterSpacing:4,color:C.red,fontWeight:700,marginBottom:4}}>ADMIN</div>
+      <div style={{fontSize:24,fontWeight:900,color:C.text,marginBottom:20}}>Enter Results</div>
+      <input type="password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&pw===ADMIN_PW)setAuthed(true);}} placeholder="Password" style={{...inputStyle,width:"100%",maxWidth:280,marginBottom:12,fontSize:16,padding:"14px 16px",textAlign:"center"}}/>
+      <button onClick={()=>{if(pw===ADMIN_PW)setAuthed(true);}} style={{...btnPrimary,opacity:pw?1:0.5}}>Login</button>
+      {pw&&pw!==ADMIN_PW&&pw.length>3&&<div style={{color:C.red,fontSize:13,marginTop:8}}>Incorrect password</div>}
+    </div>
+  );
+
+  const completed=Object.keys(res).length;
+
+  return(
+    <div style={page}>
+      <div style={{padding:"14px 14px 10px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <div>
+          <div style={{fontSize:11,letterSpacing:3,color:C.red,fontWeight:700}}>ADMIN</div>
+          <div style={{fontSize:20,fontWeight:900,color:C.text}}>Game Results</div>
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:12,color:C.dim}}>{completed} results entered</div>
+          {saving&&<div style={{fontSize:11,color:C.accent}}>Saving...</div>}
+          {!saving&&lastSaved&&<div style={{fontSize:11,color:C.green}}>Saved {lastSaved}</div>}
+        </div>
+      </div>
+
+      <div style={{padding:"8px 8px 40px",display:"flex",flexDirection:"column",gap:16}}>
+        {allGames.map(rnd=>(
+          <div key={rnd.label}>
+            <div style={{fontSize:15,fontWeight:800,color:C.accent,marginBottom:8,letterSpacing:1}}>{rnd.label}</div>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {rnd.games.map(g=>{
+                const t1=TEAMS[g.t1],t2=TEAMS[g.t2];
+                if(!t1||!t2) return null;
+                const winner=res[g.id];
+                return(
+                  <div key={g.id} style={{background:C.card,borderRadius:8,overflow:"hidden",border:`1px solid ${C.border}`}}>
+                    <div style={{padding:"4px 12px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <span style={{fontSize:11,color:C.sub,fontWeight:600}}>{g.region}</span>
+                      {winner&&<button onClick={()=>clearResult(g.id)} style={{fontSize:10,color:C.red,background:"transparent",border:"none",cursor:"pointer",padding:"2px 6px"}}>Clear</button>}
+                    </div>
+                    {[g.t1,g.t2].map((tk,idx)=>{
+                      const tm=TEAMS[tk],isW=winner===tk;
+                      return(
+                        <button key={tk} onClick={()=>setResult(g.id,tk)} style={{
+                          display:"flex",alignItems:"center",padding:"10px 12px",gap:8,width:"100%",
+                          background:isW?`${C.green}15`:"transparent",
+                          border:"none",borderBottom:idx===0?`1px solid ${C.border}`:"none",
+                          cursor:"pointer",
+                        }}>
+                          <span style={{fontSize:15,fontWeight:800,color:C.accent,width:22}}>{tm.seed}</span>
+                          <span style={{fontSize:15,fontWeight:isW?800:500,color:isW?C.green:C.text,flex:1,textAlign:"left"}}>{tm.name}{isW&&" ✓"}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── MAIN APP ──────────────────────────────────────────────────────────
 export default function App(){
+  // Admin mode check
+  const [isAdmin]=useState(()=>new URLSearchParams(window.location.search).get("admin")==="true");
+  if(isAdmin) return <AdminPanel/>;
+
   const [appState,setAppState]=useState("loading"); // loading|mode_select|picking|review|submitted|locked|lookup
   const [mode,setMode]=useState(null);
   const [round,setRound]=useState(0);
