@@ -36,7 +36,19 @@ function calcScore(userPicks, results) {
   return { score, possible, correct, total };
 }
 
-// ── ALL 68 TEAMS ──────────────────────────────────────────────────────
+// ── NAME HANDLING ─────────────────────────────────────────────────────
+const BLOCKLIST = ["ass","shit","fuck","damn","dick","cock","cunt","bitch","piss","slut","whore","tits","fag","nig","porn","nazi","rape","anal","cum","hoe","thot","stfu","wtf","milf"];
+function sanitizeName(raw) { return raw.replace(/[^a-zA-Z\s]/g,"").replace(/\s+/g," ").slice(0,20); }
+function isClean(name) { const lower=name.toLowerCase().replace(/\s/g,""); return !BLOCKLIST.some(w=>lower.includes(w)); }
+function truncateName(name) {
+  const parts=name.trim().split(/\s+/);
+  if(parts.length<2) return parts[0]?.slice(0,3)||"???";
+  const first=parts[0].slice(0,3);
+  const lastInit=parts[parts.length-1][0]?.toUpperCase()||"";
+  return `${first} ${lastInit}.`;
+}
+
+
 const T = (name,seed,region,rec,kp,off,def,star,inj,style,str,weak,mom,march) =>
   ({name,seed,region,rec,kp,off,def,star,inj,style,str,weak,mom,march});
 
@@ -264,7 +276,7 @@ function Leaderboard({brackets,results,myId}){
         <div key={b.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:b.id===myId?`${C.accent}12`:i%2===0?C.card:C.surface,borderRadius:6,marginBottom:4,border:b.id===myId?`1px solid ${C.accent}`:`1px solid ${C.border}`}}>
           <span style={{fontSize:16,fontWeight:800,color:i<3?C.accent:C.sub,width:28,textAlign:"center"}}>{i+1}</span>
           <div style={{flex:1,minWidth:0}}>
-            <div style={{fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{b.name}{b.id===myId&&<span style={{color:C.accent,marginLeft:6,fontSize:11}}>YOU</span>}</div>
+            <div style={{fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{truncateName(b.name)}{b.id===myId&&<span style={{color:C.accent,marginLeft:6,fontSize:11}}>YOU</span>}</div>
             <div style={{fontSize:11,color:C.sub}}>Champion: {TEAMS[b.champion]?.name||"?"} · {b.correct}/{b.total} correct</div>
           </div>
           <div style={{textAlign:"right",flexShrink:0}}>
@@ -332,10 +344,10 @@ export default function App(){
 
   const pick=(gid,tk)=>setPicks(p=>({...p,[gid]:tk}));
   const advance=()=>{if(round===6&&picks.champ)setAppState("review");else{setRound(r=>r+1);setRegionFilter("east");window.scrollTo({top:0,behavior:"smooth"});}};
-  const reset=()=>{setPicks({});setRound(0);setMode(null);setMyBracket(null);setMyId(null);setName("");setAppState("mode_select");localStorage.removeItem("mm_bracket_id");};
+  const reset=()=>{setPicks({});setRound(0);setMode(null);setMyBracket(null);setMyId(null);setName("");setLookupName("");setLookupResults(null);setAppState("mode_select");localStorage.removeItem("mm_bracket_id");};
 
   const submitBracket=async()=>{
-    if(!name.trim()||saving)return;setSaving(true);
+    if(!name.trim()||!isClean(name)||saving)return;setSaving(true);
     const res=await saveBracket(name.trim(),picks,mode,picks.champ);
     if(res&&res[0]){
       const b=res[0];localStorage.setItem("mm_bracket_id",b.id);setMyBracket(b);setMyId(b.id);
@@ -350,7 +362,7 @@ export default function App(){
     setLookupResults(res||[]);
   };
 
-  const viewBracket=(b)=>{setMyBracket(b);setMyId(b.id);setPicks(b.picks||{});setMode(b.upset_mode);setAppState("submitted");};
+  const viewBracket=(b)=>{localStorage.setItem("mm_bracket_id",b.id);setMyBracket(b);setMyId(b.id);setPicks(b.picks||{});setMode(b.upset_mode);setLookupResults(null);setLookupName("");setAppState("submitted");};
 
   const regionPickCounts={};
   if(showRegionToggle)for(const reg of RORDER){const rg=games.filter(g=>g.region===reg);regionPickCounts[reg]={total:rg.length,picked:rg.filter(g=>picks[g.id]).length};}
@@ -400,6 +412,25 @@ export default function App(){
         ))}
       </div>
       <div style={{fontSize:12,color:C.sub,marginTop:24,textAlign:"center",maxWidth:320,lineHeight:1.5}}>Brackets lock at 10:00 AM ET on Wednesday, March 18.</div>
+
+      <div style={{marginTop:32,width:"100%",maxWidth:400,borderTop:`1px solid ${C.border}`,paddingTop:24}}>
+        <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:10,textAlign:"center"}}>Already submitted a bracket?</div>
+        <div style={{display:"flex",gap:8}}>
+          <input value={lookupName} onChange={e=>setLookupName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doLookup()} placeholder="Search by name..." style={{...inputStyle,flex:1}}/>
+          <button onClick={doLookup} style={btnSmall}>Find</button>
+        </div>
+        {lookupResults&&lookupResults.length===0&&<div style={{color:C.sub,fontSize:13,marginTop:8,textAlign:"center"}}>No brackets found for that name.</div>}
+        {lookupResults&&lookupResults.length>0&&(
+          <div style={{marginTop:8,display:"flex",flexDirection:"column",gap:6}}>
+            {lookupResults.map(b=>(
+              <button key={b.id} onClick={()=>viewBracket(b)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"10px 14px",background:C.card,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",textAlign:"left",width:"100%"}}>
+                <div><div style={{fontSize:14,fontWeight:700,color:C.text}}>{b.name}</div><div style={{fontSize:11,color:C.sub}}>Champion: {TEAMS[b.champion]?.name} · {modeLabel(b.upset_mode)}</div></div>
+                <span style={{fontSize:12,color:C.accent,fontWeight:600}}>View →</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 
@@ -415,9 +446,11 @@ export default function App(){
         <VisualBracket picks={picks}/>
         <div style={{padding:"16px 16px 100px",maxWidth:400,margin:"0 auto"}}>
           <div style={{fontSize:16,fontWeight:700,color:C.text,marginBottom:8,textAlign:"center"}}>Submit Your Bracket</div>
-          <div style={{fontSize:13,color:C.sub,marginBottom:16,textAlign:"center"}}>Enter your name to save and join the leaderboard.</div>
-          <input value={name} onChange={e=>setName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&submitBracket()} placeholder="Your name..." style={{...inputStyle,width:"100%",marginBottom:12,fontSize:16,padding:"14px 16px"}}/>
-          <button onClick={submitBracket} disabled={!name.trim()||saving} style={{...btnPrimary,width:"100%",opacity:name.trim()?1:0.5}}>{saving?"Saving...":"Submit Bracket"}</button>
+          <div style={{fontSize:13,color:C.sub,marginBottom:16,textAlign:"center"}}>Enter your first name and last initial to join the leaderboard.</div>
+          <input value={name} onChange={e=>setName(sanitizeName(e.target.value))} onKeyDown={e=>e.key==="Enter"&&submitBracket()} placeholder="e.g. Patrick M" style={{...inputStyle,width:"100%",marginBottom:4,fontSize:16,padding:"14px 16px"}}/>
+          <div style={{fontSize:11,color:C.sub,marginBottom:12,textAlign:"center"}}>Leaderboard displays as: <span style={{color:C.accent,fontWeight:700}}>{name.trim()?truncateName(name):"Pat M."}</span></div>
+          {name.trim()&&!isClean(name)&&<div style={{fontSize:12,color:C.red,marginBottom:8,textAlign:"center"}}>Please choose an appropriate name.</div>}
+          <button onClick={submitBracket} disabled={!name.trim()||!isClean(name)||saving} style={{...btnPrimary,width:"100%",opacity:name.trim()&&isClean(name)?1:0.5}}>{saving?"Saving...":"Submit Bracket"}</button>
           <button onClick={()=>{setAppState("picking");setRound(6);}} style={{...btnGhost,width:"100%",marginTop:8}}>← Go Back and Edit</button>
         </div>
       </div>
