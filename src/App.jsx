@@ -271,13 +271,13 @@ function VisualBracket({picks}){
 // ── LEADERBOARD ──────────────────────────────────────────────────────
 function Leaderboard({brackets,results,myId,onView}){
   const scored=brackets.map(b=>{const s=calcScore(b.picks||{},results);return{...b,...s};}).sort((a,b)=>b.score-a.score);
-  const top25=scored.slice(0,25);
+  const top50=scored.slice(0,50);
   return(
     <div style={{padding:"0 8px"}}>
       <div style={{fontSize:17,fontWeight:800,color:C.text,marginBottom:4}}>Leaderboard</div>
-      <div style={{fontSize:12,color:C.sub,marginBottom:12}}>ESPN scoring: 1/2/4/8/16/32 per round · 192 max · Tap a name to view their bracket</div>
-      {top25.length===0&&<div style={{color:C.sub,fontSize:14,padding:20,textAlign:"center"}}>No brackets submitted yet.</div>}
-      {top25.map((b,i)=>(
+      <div style={{fontSize:12,color:C.sub,marginBottom:12}}>Scoring: 1/2/4/8/16/32 per round · 192 max · Tap a name to view their bracket</div>
+      {top50.length===0&&<div style={{color:C.sub,fontSize:14,padding:20,textAlign:"center"}}>No brackets submitted yet.</div>}
+      {top50.map((b,i)=>(
         <button key={b.id} onClick={()=>onView?.(b)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:b.id===myId?`${C.accent}12`:i%2===0?C.card:C.surface,borderRadius:6,marginBottom:4,border:b.id===myId?`1px solid ${C.accent}`:`1px solid ${C.border}`,cursor:"pointer",transition:"all 0.15s",width:"100%",textAlign:"left"}}>
           <span style={{fontSize:16,fontWeight:800,color:i<3?C.accent:C.sub,width:28,textAlign:"center",flexShrink:0}}>{i+1}</span>
           <div style={{flex:1,minWidth:0}}>
