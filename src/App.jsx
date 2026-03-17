@@ -278,8 +278,8 @@ function Leaderboard({brackets,results,myId,onView}){
       <div style={{fontSize:12,color:C.sub,marginBottom:12}}>ESPN scoring: 1/2/4/8/16/32 per round · 192 max · Tap a name to view their bracket</div>
       {top25.length===0&&<div style={{color:C.sub,fontSize:14,padding:20,textAlign:"center"}}>No brackets submitted yet.</div>}
       {top25.map((b,i)=>(
-        <div key={b.id} onClick={()=>onView?.(b)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:b.id===myId?`${C.accent}12`:i%2===0?C.card:C.surface,borderRadius:6,marginBottom:4,border:b.id===myId?`1px solid ${C.accent}`:`1px solid ${C.border}`,cursor:"pointer",transition:"all 0.15s"}}>
-          <span style={{fontSize:16,fontWeight:800,color:i<3?C.accent:C.sub,width:28,textAlign:"center"}}>{i+1}</span>
+        <button key={b.id} onClick={()=>onView?.(b)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:b.id===myId?`${C.accent}12`:i%2===0?C.card:C.surface,borderRadius:6,marginBottom:4,border:b.id===myId?`1px solid ${C.accent}`:`1px solid ${C.border}`,cursor:"pointer",transition:"all 0.15s",width:"100%",textAlign:"left"}}>
+          <span style={{fontSize:16,fontWeight:800,color:i<3?C.accent:C.sub,width:28,textAlign:"center",flexShrink:0}}>{i+1}</span>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{truncateName(b.name)}{b.id===myId&&<span style={{color:C.accent,marginLeft:6,fontSize:11}}>YOU</span>}</div>
             <div style={{fontSize:11,color:C.sub}}>Champion: {TEAMS[b.champion]?.name||"?"}{b.picks?.tiebreaker?` · Final: ${b.picks.tiebreaker.score1}-${b.picks.tiebreaker.score2}`:""}</div>
@@ -289,9 +289,9 @@ function Leaderboard({brackets,results,myId,onView}){
               <div style={{fontSize:20,fontWeight:900,color:C.text}}>{b.score}</div>
               <div style={{fontSize:10,color:C.sub}}>pts</div>
             </div>
-            <span style={{fontSize:12,color:C.sub}}>›</span>
+            <span style={{fontSize:14,color:C.sub}}>›</span>
           </div>
-        </div>
+        </button>
       ))}
     </div>
   );
@@ -351,11 +351,11 @@ export default function App(){
   const filteredGames=showRegionToggle?games.filter(g=>g.region===regionFilter):games;
   const expectedCount=round===0?4:round===1?32:round===2?16:round===3?8:round===4?4:round===5?2:1;
   const pickedCount=games.filter(g=>picks[g.id]).length;
-  const allPicked=round===6?(pickedCount===1&&champReady):(pickedCount===expectedCount&&games.length===expectedCount);
-
   const pick=(gid,tk)=>setPicks(p=>({...p,[gid]:tk}));
-  const champReady=round===6&&picks.champ&&score1&&score2&&parseInt(score1)>0&&parseInt(score2)>0;
-  const advance=()=>{if(round===6&&champReady)setAppState("review");else{setRound(r=>r+1);setRegionFilter("east");window.scrollTo({top:0,behavior:"smooth"});}};
+  const hasScores=score1&&score2&&parseInt(score1)>0&&parseInt(score2)>0;
+  const champReady=round===6&&picks.champ&&hasScores;
+  const allPicked=round===6?champReady:(pickedCount===expectedCount&&games.length===expectedCount);
+  const advance=()=>{if(round===6&&champReady)setAppState("review");else if(round<6){setRound(r=>r+1);setRegionFilter("east");window.scrollTo({top:0,behavior:"smooth"});}};
   const reset=()=>{setPicks({});setRound(0);setMode(null);setMyBracket(null);setMyId(null);setName("");setScore1("");setScore2("");setLookupName("");setLookupResults(null);setAppState("mode_select");localStorage.removeItem("mm_bracket_id");};
 
   const submitBracket=async()=>{
@@ -550,27 +550,23 @@ export default function App(){
         {filteredGames.map(g=><GameCard key={g.id} game={g} picked={picks[g.id]} onPick={pick} mode={mode}/>)}
         {filteredGames.length===0&&<div style={{textAlign:"center",padding:40,color:C.sub,fontSize:14}}>No games in this region yet. Pick winners in the previous round first.</div>}
 
-        {round===6&&picks.champ&&(()=>{
-          const t1k=picks.ff_0,t2k=picks.ff_1,t1=TEAMS[t1k],t2=TEAMS[t2k];
-          if(!t1||!t2) return null;
-          return(
-            <div style={{background:C.card,borderRadius:10,border:`1px solid ${C.accent}44`,padding:"16px 14px",marginTop:4}}>
-              <div style={{fontSize:14,fontWeight:700,color:C.accent,marginBottom:4,textAlign:"center"}}>Tiebreaker</div>
-              <div style={{fontSize:13,color:C.sub,marginBottom:14,textAlign:"center"}}>Predict the final score of the championship game.</div>
-              <div style={{display:"flex",gap:12,alignItems:"center",justifyContent:"center"}}>
-                <div style={{textAlign:"center",flex:1,maxWidth:140}}>
-                  <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:6}}><span style={{color:C.accent}}>{t1.seed}</span> {t1.name}</div>
-                  <input type="number" min="0" max="200" value={score1} onChange={e=>setScore1(e.target.value.replace(/\D/g,"").slice(0,3))} placeholder="0" style={{...inputStyle,width:"100%",textAlign:"center",fontSize:24,fontWeight:800,padding:"10px 8px"}}/>
-                </div>
-                <div style={{fontSize:18,fontWeight:800,color:C.sub,paddingTop:20}}>—</div>
-                <div style={{textAlign:"center",flex:1,maxWidth:140}}>
-                  <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:6}}><span style={{color:C.accent}}>{t2.seed}</span> {t2.name}</div>
-                  <input type="number" min="0" max="200" value={score2} onChange={e=>setScore2(e.target.value.replace(/\D/g,"").slice(0,3))} placeholder="0" style={{...inputStyle,width:"100%",textAlign:"center",fontSize:24,fontWeight:800,padding:"10px 8px"}}/>
-                </div>
+        {round===6&&picks.champ&&TEAMS[picks.ff_0]&&TEAMS[picks.ff_1]&&(
+          <div style={{background:C.card,borderRadius:10,border:`1px solid ${C.accent}44`,padding:"16px 14px",marginTop:4}}>
+            <div style={{fontSize:14,fontWeight:700,color:C.accent,marginBottom:4,textAlign:"center"}}>Tiebreaker</div>
+            <div style={{fontSize:13,color:C.sub,marginBottom:14,textAlign:"center"}}>Predict the final score of the championship game.</div>
+            <div style={{display:"flex",gap:12,alignItems:"center",justifyContent:"center"}}>
+              <div style={{textAlign:"center",flex:1,maxWidth:140}}>
+                <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:6}}><span style={{color:C.accent}}>{TEAMS[picks.ff_0].seed}</span> {TEAMS[picks.ff_0].name}</div>
+                <input type="number" inputMode="numeric" min="0" max="200" value={score1} onChange={e=>setScore1(e.target.value.replace(/\D/g,"").slice(0,3))} placeholder="0" style={{...inputStyle,width:"100%",textAlign:"center",fontSize:24,fontWeight:800,padding:"10px 8px"}}/>
+              </div>
+              <div style={{fontSize:18,fontWeight:800,color:C.sub,paddingTop:20}}>—</div>
+              <div style={{textAlign:"center",flex:1,maxWidth:140}}>
+                <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:6}}><span style={{color:C.accent}}>{TEAMS[picks.ff_1].seed}</span> {TEAMS[picks.ff_1].name}</div>
+                <input type="number" inputMode="numeric" min="0" max="200" value={score2} onChange={e=>setScore2(e.target.value.replace(/\D/g,"").slice(0,3))} placeholder="0" style={{...inputStyle,width:"100%",textAlign:"center",fontSize:24,fontWeight:800,padding:"10px 8px"}}/>
               </div>
             </div>
-          );
-        })()}
+          </div>
+        )}
       </div>
       {allPicked&&(
         <div style={{position:"fixed",bottom:0,left:0,right:0,padding:"14px 16px",background:`linear-gradient(transparent,${C.bg} 40%)`,textAlign:"center",zIndex:10}}>
