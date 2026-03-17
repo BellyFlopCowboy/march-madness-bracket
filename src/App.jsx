@@ -256,6 +256,11 @@ function VisualBracket({picks}){
             <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:2}}>CHAMPION</div>
             <div style={{fontSize:24,fontWeight:900,color:C.text}}>🏀 {champ.name}</div>
             <div style={{fontSize:12,color:C.sub}}>{champ.rec} · KenPom #{champ.kp} · {champ.seed}-seed</div>
+            {picks.tiebreaker&&(
+              <div style={{fontSize:12,color:C.dim,marginTop:6}}>
+                Predicted final: {TEAMS[picks.tiebreaker.team1]?.name} {picks.tiebreaker.score1} — {TEAMS[picks.tiebreaker.team2]?.name} {picks.tiebreaker.score2}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -264,24 +269,27 @@ function VisualBracket({picks}){
 }
 
 // ── LEADERBOARD ──────────────────────────────────────────────────────
-function Leaderboard({brackets,results,myId}){
+function Leaderboard({brackets,results,myId,onView}){
   const scored=brackets.map(b=>{const s=calcScore(b.picks||{},results);return{...b,...s};}).sort((a,b)=>b.score-a.score);
   const top25=scored.slice(0,25);
   return(
     <div style={{padding:"0 8px"}}>
       <div style={{fontSize:17,fontWeight:800,color:C.text,marginBottom:4}}>Leaderboard</div>
-      <div style={{fontSize:12,color:C.sub,marginBottom:12}}>ESPN scoring: 1/2/4/8/16/32 per round · 192 max</div>
+      <div style={{fontSize:12,color:C.sub,marginBottom:12}}>ESPN scoring: 1/2/4/8/16/32 per round · 192 max · Tap a name to view their bracket</div>
       {top25.length===0&&<div style={{color:C.sub,fontSize:14,padding:20,textAlign:"center"}}>No brackets submitted yet.</div>}
       {top25.map((b,i)=>(
-        <div key={b.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:b.id===myId?`${C.accent}12`:i%2===0?C.card:C.surface,borderRadius:6,marginBottom:4,border:b.id===myId?`1px solid ${C.accent}`:`1px solid ${C.border}`}}>
+        <div key={b.id} onClick={()=>onView?.(b)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:b.id===myId?`${C.accent}12`:i%2===0?C.card:C.surface,borderRadius:6,marginBottom:4,border:b.id===myId?`1px solid ${C.accent}`:`1px solid ${C.border}`,cursor:"pointer",transition:"all 0.15s"}}>
           <span style={{fontSize:16,fontWeight:800,color:i<3?C.accent:C.sub,width:28,textAlign:"center"}}>{i+1}</span>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontSize:14,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{truncateName(b.name)}{b.id===myId&&<span style={{color:C.accent,marginLeft:6,fontSize:11}}>YOU</span>}</div>
-            <div style={{fontSize:11,color:C.sub}}>Champion: {TEAMS[b.champion]?.name||"?"} · {b.correct}/{b.total} correct</div>
+            <div style={{fontSize:11,color:C.sub}}>Champion: {TEAMS[b.champion]?.name||"?"}{b.picks?.tiebreaker?` · Final: ${b.picks.tiebreaker.score1}-${b.picks.tiebreaker.score2}`:""}</div>
           </div>
-          <div style={{textAlign:"right",flexShrink:0}}>
-            <div style={{fontSize:20,fontWeight:900,color:C.text}}>{b.score}</div>
-            <div style={{fontSize:10,color:C.sub}}>pts</div>
+          <div style={{textAlign:"right",flexShrink:0,display:"flex",alignItems:"center",gap:8}}>
+            <div>
+              <div style={{fontSize:20,fontWeight:900,color:C.text}}>{b.score}</div>
+              <div style={{fontSize:10,color:C.sub}}>pts</div>
+            </div>
+            <span style={{fontSize:12,color:C.sub}}>›</span>
           </div>
         </div>
       ))}
@@ -305,6 +313,9 @@ export default function App(){
   const [lookupName,setLookupName]=useState("");
   const [lookupResults,setLookupResults]=useState(null);
   const [activeTab,setActiveTab]=useState("bracket"); // bracket|leaderboard
+  const [score1,setScore1]=useState("");
+  const [score2,setScore2]=useState("");
+  const [viewingBracket,setViewingBracket]=useState(null);
 
   // Init
   useEffect(()=>{
@@ -340,15 +351,18 @@ export default function App(){
   const filteredGames=showRegionToggle?games.filter(g=>g.region===regionFilter):games;
   const expectedCount=round===0?4:round===1?32:round===2?16:round===3?8:round===4?4:round===5?2:1;
   const pickedCount=games.filter(g=>picks[g.id]).length;
-  const allPicked=pickedCount===expectedCount&&games.length===expectedCount;
+  const allPicked=round===6?(pickedCount===1&&champReady):(pickedCount===expectedCount&&games.length===expectedCount);
 
   const pick=(gid,tk)=>setPicks(p=>({...p,[gid]:tk}));
-  const advance=()=>{if(round===6&&picks.champ)setAppState("review");else{setRound(r=>r+1);setRegionFilter("east");window.scrollTo({top:0,behavior:"smooth"});}};
-  const reset=()=>{setPicks({});setRound(0);setMode(null);setMyBracket(null);setMyId(null);setName("");setLookupName("");setLookupResults(null);setAppState("mode_select");localStorage.removeItem("mm_bracket_id");};
+  const champReady=round===6&&picks.champ&&score1&&score2&&parseInt(score1)>0&&parseInt(score2)>0;
+  const advance=()=>{if(round===6&&champReady)setAppState("review");else{setRound(r=>r+1);setRegionFilter("east");window.scrollTo({top:0,behavior:"smooth"});}};
+  const reset=()=>{setPicks({});setRound(0);setMode(null);setMyBracket(null);setMyId(null);setName("");setScore1("");setScore2("");setLookupName("");setLookupResults(null);setAppState("mode_select");localStorage.removeItem("mm_bracket_id");};
 
   const submitBracket=async()=>{
     if(!name.trim()||!isClean(name)||saving)return;setSaving(true);
-    const res=await saveBracket(name.trim(),picks,mode,picks.champ);
+    const tiebreaker={team1:picks.ff_0,score1:parseInt(score1)||0,team2:picks.ff_1,score2:parseInt(score2)||0};
+    const fullPicks={...picks,tiebreaker};
+    const res=await saveBracket(name.trim(),fullPicks,mode,picks.champ);
     if(res&&res[0]){
       const b=res[0];localStorage.setItem("mm_bracket_id",b.id);setMyBracket(b);setMyId(b.id);
       const allB=await allBrackets()||[];setBrackets(allB);setAppState("submitted");
@@ -371,6 +385,31 @@ export default function App(){
   // ── LOADING ──
   if(appState==="loading") return <div style={{...page,display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{color:C.sub,fontSize:16}}>Loading...</div></div>;
 
+  // ── VIEWING SOMEONE'S BRACKET ──
+  if(viewingBracket){
+    const vb=viewingBracket;
+    const vScore=calcScore(vb.picks||{},results);
+    return(
+      <div style={page}>
+        <div style={{padding:"14px 14px 10px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div>
+            <div style={{fontSize:11,letterSpacing:3,color:C.accent,fontWeight:700}}>VIEWING BRACKET</div>
+            <div style={{fontSize:20,fontWeight:900,color:C.text}}>{vb.name}</div>
+          </div>
+          <button onClick={()=>setViewingBracket(null)} style={btnGhost}>← Back</button>
+        </div>
+        <div style={{padding:"8px 12px",borderBottom:`1px solid ${C.border}`,display:"flex",gap:16,alignItems:"center"}}>
+          <div><span style={{fontSize:11,color:C.sub}}>Score</span><div style={{fontSize:22,fontWeight:900,color:C.text}}>{vScore.score}</div></div>
+          <div><span style={{fontSize:11,color:C.sub}}>Correct</span><div style={{fontSize:16,fontWeight:700,color:C.text}}>{vScore.correct}/{vScore.total}</div></div>
+          <div><span style={{fontSize:11,color:C.sub}}>Mode</span><div style={{fontSize:13,fontWeight:600,color:C.dim}}>{modeLabel(vb.upset_mode)}</div></div>
+        </div>
+        <div style={{padding:"8px 0 20px"}}>
+          <VisualBracket picks={vb.picks||{}}/>
+        </div>
+      </div>
+    );
+  }
+
   // ── LOCKED (past cutoff, no bracket) ──
   if(appState==="locked") return(
     <div style={page}>
@@ -391,7 +430,7 @@ export default function App(){
           </button>
         ))}
       </div>
-      <Leaderboard brackets={brackets} results={results} myId={myId}/>
+      <Leaderboard brackets={brackets} results={results} myId={myId} onView={b=>setViewingBracket(b)}/>
     </div>
   );
 
@@ -477,7 +516,7 @@ export default function App(){
           </div>
         </div>
       )}
-      {activeTab==="leaderboard"&&<div style={{padding:"16px 0"}}><Leaderboard brackets={brackets} results={results} myId={myId}/></div>}
+      {activeTab==="leaderboard"&&<div style={{padding:"16px 0"}}><Leaderboard brackets={brackets} results={results} myId={myId} onView={b=>setViewingBracket(b)}/></div>}
     </div>
   );
 
@@ -510,6 +549,28 @@ export default function App(){
       <div style={{padding:"4px 8px 100px",display:"flex",flexDirection:"column",gap:10}}>
         {filteredGames.map(g=><GameCard key={g.id} game={g} picked={picks[g.id]} onPick={pick} mode={mode}/>)}
         {filteredGames.length===0&&<div style={{textAlign:"center",padding:40,color:C.sub,fontSize:14}}>No games in this region yet. Pick winners in the previous round first.</div>}
+
+        {round===6&&picks.champ&&(()=>{
+          const t1k=picks.ff_0,t2k=picks.ff_1,t1=TEAMS[t1k],t2=TEAMS[t2k];
+          if(!t1||!t2) return null;
+          return(
+            <div style={{background:C.card,borderRadius:10,border:`1px solid ${C.accent}44`,padding:"16px 14px",marginTop:4}}>
+              <div style={{fontSize:14,fontWeight:700,color:C.accent,marginBottom:4,textAlign:"center"}}>Tiebreaker</div>
+              <div style={{fontSize:13,color:C.sub,marginBottom:14,textAlign:"center"}}>Predict the final score of the championship game.</div>
+              <div style={{display:"flex",gap:12,alignItems:"center",justifyContent:"center"}}>
+                <div style={{textAlign:"center",flex:1,maxWidth:140}}>
+                  <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:6}}><span style={{color:C.accent}}>{t1.seed}</span> {t1.name}</div>
+                  <input type="number" min="0" max="200" value={score1} onChange={e=>setScore1(e.target.value.replace(/\D/g,"").slice(0,3))} placeholder="0" style={{...inputStyle,width:"100%",textAlign:"center",fontSize:24,fontWeight:800,padding:"10px 8px"}}/>
+                </div>
+                <div style={{fontSize:18,fontWeight:800,color:C.sub,paddingTop:20}}>—</div>
+                <div style={{textAlign:"center",flex:1,maxWidth:140}}>
+                  <div style={{fontSize:13,fontWeight:700,color:C.text,marginBottom:6}}><span style={{color:C.accent}}>{t2.seed}</span> {t2.name}</div>
+                  <input type="number" min="0" max="200" value={score2} onChange={e=>setScore2(e.target.value.replace(/\D/g,"").slice(0,3))} placeholder="0" style={{...inputStyle,width:"100%",textAlign:"center",fontSize:24,fontWeight:800,padding:"10px 8px"}}/>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
       </div>
       {allPicked&&(
         <div style={{position:"fixed",bottom:0,left:0,right:0,padding:"14px 16px",background:`linear-gradient(transparent,${C.bg} 40%)`,textAlign:"center",zIndex:10}}>
