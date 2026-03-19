@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 const SB_URL = "https://fbsotnclyjqpyrcdoqsz.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZic290bmNseWpxcHlyY2RvcXN6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3NTc1NjQsImV4cCI6MjA4OTMzMzU2NH0.hkEjKS1pBRDT-EZeGQDFKI3tIN69bjwRpM1iYRkts7k";
 const SB_HEADERS = {"Content-Type":"application/json","apikey":SB_KEY,"Authorization":`Bearer ${SB_KEY}`};
-const CUTOFF = new Date("2026-03-18T14:00:00Z"); // 10 AM ET March 18
+const CUTOFF = new Date("2026-03-19T17:00:00Z"); // 10 AM ET March 18
 
 async function sbFetch(path, opts = {}) {
   try {
