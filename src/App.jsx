@@ -308,6 +308,11 @@ function RegionTree({region,picks,results}){
 function VisualBracket({picks,results}){
   const champ=picks.champ?TEAMS[picks.champ]:null;
   const eliminated = results ? getEliminatedTeams(results) : new Set();
+  const champStatus=champ&&results?getSlotStatus("champ",picks.champ,results,eliminated):"pending";
+  const champSt=STATUS_STYLES[champStatus]||STATUS_STYLES.pending;
+  const champBorderColor=champStatus==="correct"?C.green:champStatus==="wrong"||champStatus==="eliminated"?C.red:C.accent;
+  const champBgColor=champStatus==="correct"?`${C.green}15`:champStatus==="wrong"||champStatus==="eliminated"?`${C.red}15`:`${C.accent}15`;
+  const champLabelColor=champStatus==="correct"?C.green:champStatus==="wrong"||champStatus==="eliminated"?C.red:C.accent;
   return(
     <div style={{padding:8}}>
       {RORDER.map(r=><RegionTree key={r} region={r} picks={picks} results={results}/>)}
@@ -320,22 +325,18 @@ function VisualBracket({picks,results}){
             return <BracketSlot key={i} teamKey={tk} status={status}/>;
           })}
         </div>
-        {champ&&(()=>{
-          const champStatus=results?getSlotStatus("champ",picks.champ,results,eliminated):"pending";
-          const champSt=STATUS_STYLES[champStatus]||STATUS_STYLES.pending;
-          return(
-            <div style={{marginTop:8,padding:"12px 20px",background:champStatus==="correct"?`${C.green}15`:champStatus==="wrong"||champStatus==="eliminated"?`${C.red}15`:`${C.accent}15`,borderRadius:8,border:`2px solid ${champStatus==="correct"?C.green:champStatus==="wrong"||champStatus==="eliminated"?C.red:C.accent}`,display:"inline-block"}}>
-              <div style={{fontSize:10,color:champStatus==="correct"?C.green:champStatus==="wrong"||champStatus==="eliminated"?C.red:C.accent,fontWeight:700,letterSpacing:2}}>CHAMPION</div>
-              <div style={{fontSize:24,fontWeight:900,color:champSt.textColor}}>🏀 {champ.name}</div>
-              <div style={{fontSize:12,color:C.sub}}>{champ.rec} · KenPom #{champ.kp} · {champ.seed}-seed</div>
-              {picks.tiebreaker&&(
-                <div style={{fontSize:12,color:C.dim,marginTop:6}}>
-                  Predicted final: {TEAMS[picks.tiebreaker.team1]?.name} {picks.tiebreaker.score1} — {TEAMS[picks.tiebreaker.team2]?.name} {picks.tiebreaker.score2}
-                </div>
-              )}
-            </div>
-          );
-        })()}
+        {champ&&(
+          <div style={{marginTop:8,padding:"12px 20px",background:champBgColor,borderRadius:8,border:`2px solid ${champBorderColor}`,display:"inline-block"}}>
+            <div style={{fontSize:10,color:champLabelColor,fontWeight:700,letterSpacing:2}}>CHAMPION</div>
+            <div style={{fontSize:24,fontWeight:900,color:champSt.textColor}}>🏀 {champ.name}</div>
+            <div style={{fontSize:12,color:C.sub}}>{champ.rec} · KenPom #{champ.kp} · {champ.seed}-seed</div>
+            {picks.tiebreaker&&(
+              <div style={{fontSize:12,color:C.dim,marginTop:6}}>
+                Predicted final: {TEAMS[picks.tiebreaker.team1]?.name} {picks.tiebreaker.score1} — {TEAMS[picks.tiebreaker.team2]?.name} {picks.tiebreaker.score2}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
