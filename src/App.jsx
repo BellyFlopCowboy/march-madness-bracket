@@ -234,8 +234,8 @@ function getEliminatedTeams(results) {
   });
   // E8
   for(const reg of RORDER){
-    const gid=`e8_${reg}`; if(!results[gid]) return;
-    const t1=results[`s16_${reg}_0`],t2=results[`s16_${reg}_1`]; if(!t1||!t2) return;
+    const gid=`e8_${reg}`; if(!results[gid]) continue;
+    const t1=results[`s16_${reg}_0`],t2=results[`s16_${reg}_1`]; if(!t1||!t2) continue;
     eliminated.add(results[gid]===t1?t2:t1);
   }
   // FF
