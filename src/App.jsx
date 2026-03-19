@@ -209,16 +209,73 @@ function GameCard({game,picked,onPick,mode}){
 }
 
 // ── VISUAL BRACKET ───────────────────────────────────────────────────
-function BracketSlot({teamKey,highlight}){
+function getEliminatedTeams(results) {
+  const eliminated = new Set();
+  const resolvePI = (k) => { if(typeof k==="string"&&k.startsWith("pi:")) return results[k.slice(3)]||null; return k; };
+  // Play-ins
+  for(const pi of PLAY_IN){ if(results[pi.id]){ const loser=results[pi.id]===pi.t1?pi.t2:pi.t1; eliminated.add(loser); }}
+  // R64
+  for(const reg of RORDER) R64[reg].forEach((pair,i)=>{
+    const gid=`r64_${reg}_${i}`; if(!results[gid]) return;
+    const t1=resolvePI(pair[0]),t2=resolvePI(pair[1]); if(!t1||!t2) return;
+    eliminated.add(results[gid]===t1?t2:t1);
+  });
+  // R32
+  for(const reg of RORDER) R32_PAIRS.forEach(([a,b],i)=>{
+    const gid=`r32_${reg}_${i}`; if(!results[gid]) return;
+    const t1=results[`r64_${reg}_${a}`],t2=results[`r64_${reg}_${b}`]; if(!t1||!t2) return;
+    eliminated.add(results[gid]===t1?t2:t1);
+  });
+  // S16
+  for(const reg of RORDER) S16_PAIRS.forEach(([a,b],i)=>{
+    const gid=`s16_${reg}_${i}`; if(!results[gid]) return;
+    const t1=results[`r32_${reg}_${a}`],t2=results[`r32_${reg}_${b}`]; if(!t1||!t2) return;
+    eliminated.add(results[gid]===t1?t2:t1);
+  });
+  // E8
+  for(const reg of RORDER){
+    const gid=`e8_${reg}`; if(!results[gid]) return;
+    const t1=results[`s16_${reg}_0`],t2=results[`s16_${reg}_1`]; if(!t1||!t2) return;
+    eliminated.add(results[gid]===t1?t2:t1);
+  }
+  // FF
+  FF_PAIRS.forEach(([r1,r2],i)=>{
+    const gid=`ff_${i}`; if(!results[gid]) return;
+    const t1=results[`e8_${r1}`],t2=results[`e8_${r2}`]; if(!t1||!t2) return;
+    eliminated.add(results[gid]===t1?t2:t1);
+  });
+  // Champ
+  if(results.champ){ const t1=results.ff_0,t2=results.ff_1; if(t1&&t2) eliminated.add(results.champ===t1?t2:t1); }
+  return eliminated;
+}
+
+function getSlotStatus(gid, userPick, results, eliminated) {
+  if(!userPick) return "pending";
+  if(results[gid]){ return results[gid]===userPick ? "correct" : "wrong"; }
+  if(eliminated.has(userPick)) return "eliminated";
+  return "pending";
+}
+
+const STATUS_STYLES = {
+  correct: { bg: `#22c55e18`, border: "#22c55e", textColor: "#22c55e" },
+  wrong: { bg: `#ef444418`, border: "#ef4444", textColor: "#ef4444" },
+  eliminated: { bg: `#ef444410`, border: "#ef444466", textColor: "#ef444499" },
+  pending: { bg: C.card, border: C.border, textColor: C.text },
+};
+
+function BracketSlot({teamKey,status="pending"}){
   const tm=TEAMS[teamKey]; if(!tm) return <div style={{...slotStyle,opacity:0.3}}>TBD</div>;
-  return(<div style={{...slotStyle,background:highlight?`${C.green}15`:C.card,borderColor:highlight?C.green:C.border}}>
+  const st=STATUS_STYLES[status]||STATUS_STYLES.pending;
+  const icon = status==="correct"?" ✓":status==="wrong"||status==="eliminated"?" ✗":"";
+  return(<div style={{...slotStyle,background:st.bg,borderColor:st.border}}>
     <span style={{color:C.accent,fontWeight:800,fontSize:12,width:18,flexShrink:0}}>{tm.seed}</span>
-    <span style={{fontSize:12,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tm.name}</span>
+    <span style={{fontSize:12,fontWeight:600,color:st.textColor,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tm.name}{icon}</span>
   </div>);
 }
 const slotStyle={display:"flex",alignItems:"center",gap:4,padding:"4px 8px",border:`1px solid ${C.border}`,borderRadius:4,background:C.card,minWidth:110,maxWidth:140};
 
-function RegionTree({region,picks}){
+function RegionTree({region,picks,results}){
+  const eliminated = results ? getEliminatedTeams(results) : new Set();
   const rounds=[
     {label:"R64",ids:Array.from({length:8},(_,i)=>`r64_${region}_${i}`)},
     {label:"R32",ids:Array.from({length:4},(_,i)=>`r32_${region}_${i}`)},
@@ -236,7 +293,10 @@ function RegionTree({region,picks}){
           {rounds.map((rnd,ri)=>(
             <div key={ri} style={{display:"flex",flexDirection:"column",justifyContent:"space-around",flex:1,gap:ri===0?4:undefined}}>
               <div style={{fontSize:10,color:C.sub,fontWeight:700,marginBottom:4,textAlign:"center"}}>{rnd.label}</div>
-              {rnd.ids.map(gid=><BracketSlot key={gid} teamKey={picks[gid]} highlight={ri===3}/>)}
+              {rnd.ids.map(gid=>{
+                const status = results ? getSlotStatus(gid, picks[gid], results, eliminated) : "pending";
+                return <BracketSlot key={gid} teamKey={picks[gid]} status={status}/>;
+              })}
             </div>
           ))}
         </div>
@@ -245,28 +305,37 @@ function RegionTree({region,picks}){
   );
 }
 
-function VisualBracket({picks}){
+function VisualBracket({picks,results}){
   const champ=picks.champ?TEAMS[picks.champ]:null;
+  const eliminated = results ? getEliminatedTeams(results) : new Set();
   return(
     <div style={{padding:8}}>
-      {RORDER.map(r=><RegionTree key={r} region={r} picks={picks}/>)}
+      {RORDER.map(r=><RegionTree key={r} region={r} picks={picks} results={results}/>)}
       <div style={{textAlign:"center",marginTop:12,padding:16,background:C.card,borderRadius:10,border:`1px solid ${C.border}`}}>
         <div style={{fontSize:11,color:C.sub,fontWeight:700,letterSpacing:1,marginBottom:8}}>FINAL FOUR</div>
         <div style={{display:"flex",justifyContent:"center",gap:12,flexWrap:"wrap",marginBottom:12}}>
-          {[0,1].map(i=>{const t=picks[`ff_${i}`];return <BracketSlot key={i} teamKey={t}/>;}) }
+          {[0,1].map(i=>{
+            const gid=`ff_${i}`,tk=picks[gid];
+            const status=results?getSlotStatus(gid,tk,results,eliminated):"pending";
+            return <BracketSlot key={i} teamKey={tk} status={status}/>;
+          })}
         </div>
-        {champ&&(
-          <div style={{marginTop:8,padding:"12px 20px",background:`${C.accent}15`,borderRadius:8,border:`2px solid ${C.accent}`,display:"inline-block"}}>
-            <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:2}}>CHAMPION</div>
-            <div style={{fontSize:24,fontWeight:900,color:C.text}}>🏀 {champ.name}</div>
-            <div style={{fontSize:12,color:C.sub}}>{champ.rec} · KenPom #{champ.kp} · {champ.seed}-seed</div>
-            {picks.tiebreaker&&(
-              <div style={{fontSize:12,color:C.dim,marginTop:6}}>
-                Predicted final: {TEAMS[picks.tiebreaker.team1]?.name} {picks.tiebreaker.score1} — {TEAMS[picks.tiebreaker.team2]?.name} {picks.tiebreaker.score2}
-              </div>
-            )}
-          </div>
-        )}
+        {champ&&(()=>{
+          const champStatus=results?getSlotStatus("champ",picks.champ,results,eliminated):"pending";
+          const champSt=STATUS_STYLES[champStatus]||STATUS_STYLES.pending;
+          return(
+            <div style={{marginTop:8,padding:"12px 20px",background:champStatus==="correct"?`${C.green}15`:champStatus==="wrong"||champStatus==="eliminated"?`${C.red}15`:`${C.accent}15`,borderRadius:8,border:`2px solid ${champStatus==="correct"?C.green:champStatus==="wrong"||champStatus==="eliminated"?C.red:C.accent}`,display:"inline-block"}}>
+              <div style={{fontSize:10,color:champStatus==="correct"?C.green:champStatus==="wrong"||champStatus==="eliminated"?C.red:C.accent,fontWeight:700,letterSpacing:2}}>CHAMPION</div>
+              <div style={{fontSize:24,fontWeight:900,color:champSt.textColor}}>🏀 {champ.name}</div>
+              <div style={{fontSize:12,color:C.sub}}>{champ.rec} · KenPom #{champ.kp} · {champ.seed}-seed</div>
+              {picks.tiebreaker&&(
+                <div style={{fontSize:12,color:C.dim,marginTop:6}}>
+                  Predicted final: {TEAMS[picks.tiebreaker.team1]?.name} {picks.tiebreaker.score1} — {TEAMS[picks.tiebreaker.team2]?.name} {picks.tiebreaker.score2}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
@@ -556,7 +625,7 @@ export default function App(){
           <div><span style={{fontSize:11,color:C.sub}}>Mode</span><div style={{fontSize:13,fontWeight:600,color:C.dim}}>{modeLabel(vb.upset_mode)}</div></div>
         </div>
         <div style={{padding:"8px 0 20px"}}>
-          <VisualBracket picks={vb.picks||{}}/>
+          <VisualBracket picks={vb.picks||{}} results={results}/>
         </div>
       </div>
     );
@@ -634,7 +703,7 @@ export default function App(){
           <div style={{fontSize:12,letterSpacing:3,color:C.accent,fontWeight:700}}>YOUR BRACKET</div>
           <div style={{fontSize:14,color:C.sub,marginTop:4}}>{modeInfo?.emoji} {modeInfo?.label}</div>
         </div>
-        <VisualBracket picks={picks}/>
+        <VisualBracket picks={picks} results={results}/>
         <div style={{padding:"16px 16px 100px",maxWidth:400,margin:"0 auto"}}>
           <div style={{fontSize:16,fontWeight:700,color:C.text,marginBottom:8,textAlign:"center"}}>Submit Your Bracket</div>
           <div style={{fontSize:13,color:C.sub,marginBottom:16,textAlign:"center"}}>Enter your first name and last initial to join the leaderboard.</div>
@@ -662,7 +731,7 @@ export default function App(){
       </div>
       {activeTab==="bracket"&&(
         <div style={{padding:"8px 0 20px"}}>
-          <VisualBracket picks={myBracket.picks||{}}/>
+          <VisualBracket picks={myBracket.picks||{}} results={results}/>
           <div style={{textAlign:"center",padding:"8px 16px"}}>
             <div style={{fontSize:12,color:C.sub}}>Mode: {modeLabel(myBracket.upset_mode)} · Submitted {new Date(myBracket.created_at).toLocaleDateString()}</div>
           </div>
