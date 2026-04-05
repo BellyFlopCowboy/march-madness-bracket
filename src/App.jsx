@@ -137,7 +137,7 @@ const R64={
 };
 const R32_PAIRS=[[0,1],[2,3],[4,5],[6,7]];
 const S16_PAIRS=[[0,1],[2,3]];
-const FF_PAIRS=[["east","midwest"],["west","south"]];
+const FF_PAIRS=[["east","south"],["midwest","west"]];
 
 // ── ANALYSIS NOTES ────────────────────────────────────────────────────
 const PI_NOTES={pi1:{rec:"texas",conf:"medium",note:"Texas has better size and Sean Miller's coaching edge. NC State is 2-7 in their last 9."},pi2:{rec:"umbc",conf:"low",note:"True toss-up. UMBC (KenPom 185) is more balanced than Howard (207)."},pi3:{rec:"lehigh",conf:"low",note:"Slight edge to Lehigh with a better overall profile."},pi4:{rec:"smu",conf:"medium",note:"Biggest gap in the First Four. SMU is KenPom 42 with elite offense (#26). Miami (OH) is KenPom 93."}};
