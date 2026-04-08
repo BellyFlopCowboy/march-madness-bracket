@@ -636,9 +636,9 @@ export default function App(){
   if(appState==="locked") return(
     <div style={page}>
       <div style={{textAlign:"center",padding:"40px 16px"}}>
-        <div style={{fontSize:40,marginBottom:8}}>🔒</div>
-        <div style={{fontSize:20,fontWeight:800,color:C.text,marginBottom:8}}>Brackets Are Locked</div>
-        <div style={{fontSize:14,color:C.sub,marginBottom:24}}>The submission deadline was 10:00 AM ET on March 18.</div>
+        <div style={{fontSize:40,marginBottom:8}}>🏆</div>
+        <div style={{fontSize:20,fontWeight:800,color:C.text,marginBottom:8}}>2026 Tournament Complete</div>
+        <div style={{fontSize:14,color:C.sub,marginBottom:24}}>Michigan Wolverines are your National Champions! See how everyone's brackets fared below.</div>
         <div style={{fontSize:14,fontWeight:700,color:C.text,marginBottom:12}}>Look up a submitted bracket:</div>
         <div style={{display:"flex",gap:8,maxWidth:320,margin:"0 auto",marginBottom:16}}>
           <input value={lookupName} onChange={e=>setLookupName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&doLookup()} placeholder="Enter a name..." style={inputStyle}/>
